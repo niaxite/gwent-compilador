@@ -19,7 +19,7 @@ public enum Ttokenlist
     MINUS,
     MODULO,
     PLUS,
-    TIMES,   
+    TIMES,
 
     // comparison operetors
     EQUAL,
@@ -28,12 +28,12 @@ public enum Ttokenlist
     LESS_EQUAL,
     LESS_THAN,
     NOT_EQUAL,
-    
+
 
     // logical operators
-    AND,        
-    OR,         
-    NOT,       
+    AND,
+    OR,
+    NOT,
 
     // assignment operators
     ASSIGN,
@@ -70,7 +70,7 @@ public enum Ttokenlist
     HASH,
     QUESTION,
     SEMICOLON,
- 
+
     // parenthisis
     LBRACE,
     LBRACKET,
@@ -80,24 +80,37 @@ public enum Ttokenlist
     RPAREN,
 
     // key words
+    BREAK,
+    CASE,
+    CATCH,
+    CLASS,
+    CONTINUE,
+    DEFAULT,
     ELSE,
+    ENUM,
+    EXTENDS,
+    FINALLY,
     FOR,
     FUN,
     IF,
+    IMPORT,
+    PRIVATE,
+    PROTECTED,
+    PUBLIC,
     RETURN,
-    TYPE,
-    WHILE,
-   
-    // flow control
-    BREAK,
-    CASE,
-    CONTINUE,
-    DEFAULT,
+    STATIC,
+    STRUCT,
     SWITCH,
+    THROW,
+    TRY,
+    TYPE,
+    VOID,
+    WHILE,
 
     // others
     EOF,
     NEWLINE,
+    CONSOLE_WRITELINE,
 }
 
 public class Ttokens
@@ -115,10 +128,18 @@ public class Ttokens
         Literal = literal;
         Line = line;
         Column = column;
-    }
+    } 
+     public override string ToString() => $"{Type} {Lexeme} {Literal} (Line: {Line}, Column: {Column})";
 
-    public override string ToString()
-    {
-        return $"{Type} {Lexeme} {Literal} (Line: {Line}, Column: {Column})";
-    }
+    public bool Equals(Ttokens? other) =>
+        other != null &&
+        Type == other.Type &&
+        Lexeme == other.Lexeme &&
+        Equals(Literal, other.Literal) &&
+        Line == other.Line &&
+        Column == other.Column;
+
+    public override bool Equals(object? obj) => Equals(obj as Ttokens);
+
+    public override int GetHashCode() => HashCode.Combine(Type, Lexeme, Literal, Line, Column);
 }

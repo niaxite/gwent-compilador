@@ -1,0 +1,2 @@
+int tartaglia = 11;
+int furina = 500;

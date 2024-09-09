@@ -14,6 +14,8 @@ public static class Lexerr
         Start,
         Character,
         Comment,
+        SingleLineComment,
+        MultiLineComment,
         String,
         Number,
         Identifier,
@@ -31,7 +33,7 @@ public static class Lexerr
         { "float", Ttokenlist.TYPE },
         { "char", Ttokenlist.TYPE },
         { "bool", Ttokenlist.TYPE },
-        { "void", Ttokenlist.TYPE },
+        { "empty", Ttokenlist.TYPE },
         { "string", Ttokenlist.TYPE },
         { "true", Ttokenlist.TRUE },
         { "false", Ttokenlist.FALSE },
@@ -41,7 +43,23 @@ public static class Lexerr
         { "switch", Ttokenlist.SWITCH },
         { "case", Ttokenlist.CASE },
         { "default", Ttokenlist.DEFAULT },
-        { "fun", Ttokenlist.FUN }
+        { "fun", Ttokenlist.FUN },
+        { "struct", Ttokenlist.STRUCT },
+        { "enum", Ttokenlist.ENUM },
+        { "import", Ttokenlist.IMPORT },
+        { "try", Ttokenlist.TRY },
+        { "catch", Ttokenlist.CATCH },
+        { "finally", Ttokenlist.FINALLY },
+        { "throw", Ttokenlist.THROW },
+        { "class", Ttokenlist.CLASS },
+        { "extends", Ttokenlist.EXTENDS },
+        { "public", Ttokenlist.PUBLIC },
+        { "private", Ttokenlist.PRIVATE },
+        { "protected", Ttokenlist.PROTECTED },
+        { "static", Ttokenlist.STATIC },
+        { "void", Ttokenlist.VOID },
+        { "console_writeline", Ttokenlist.CONSOLE_WRITELINE },
+
     };
 
     private static readonly Dictionary<string, Ttokenlist> multiCharTokens = new Dictionary<string, Ttokenlist>
@@ -68,12 +86,12 @@ public static class Lexerr
         { ">>", Ttokenlist.SHIFT_RIGHT }
     };
 
-    public static List<Ttokens> tokengen(string text)
+    public static List<Ttokens> Tokengen(string text)
     {
         text = Preprocess(text);
         List<Ttokens> tokens = new List<Ttokens>();
         int i = 0;
-        Structure Structure = Structure.Start;
+        Structure structure = Structure.Start;
         StringBuilder currentToken = new StringBuilder();
         char[] buffer = text.ToCharArray();
         int line = 1;
@@ -83,7 +101,7 @@ public static class Lexerr
         {
             char c = buffer[i];
 
-            switch (Structure)
+            switch (structure)
             {
                 case Structure.Start:
                     if (char.IsWhiteSpace(c))
@@ -102,28 +120,40 @@ public static class Lexerr
                     }
                     if (char.IsLetter(c) || c == '_')
                     {
-                        Structure = Structure.Identifier;
+                        structure = Structure.Identifier;
                         currentToken.Append(c);
                     }
                     else if (char.IsDigit(c))
                     {
-                        Structure = Structure.Number;
+                        structure = Structure.Number;
                         currentToken.Append(c);
                     }
                     else if (c == '"')
                     {
-                        Structure = Structure.String;
+                        structure = Structure.String;
                         currentToken.Append(c);
                     }
                     else if (c == '\'')
                     {
-                        Structure = Structure.Character;
+                        structure = Structure.Character;
                         currentToken.Append(c);
                     }
-                    else if (c == '/' && i + 1 < buffer.Length && buffer[i + 1] == '/')
+                    else if (c == '/' && i + 1 < buffer.Length)
                     {
-                        Structure = Structure.Comment;
-                        i++; // Skip next '/'
+                        if (buffer[i + 1] == '/')
+                        {
+                            structure = Structure.SingleLineComment;
+                            i++;
+                        }
+                        else if (buffer[i + 1] == '*')
+                        {
+                            structure = Structure.MultiLineComment;
+                            i++; 
+                        }
+                        else
+                        {
+                            tokens.Add(new Ttokens(Ttokenlist.DIVIDE, c.ToString(), null, line, column));
+                        }
                     }
                     else if (i + 1 < buffer.Length && multiCharTokens.ContainsKey($"{c}{buffer[i + 1]}"))
                     {
@@ -134,7 +164,7 @@ public static class Lexerr
                     }
                     else
                     {
-                        Ttokenlist type = GetSingleCharTtokenlist(c);
+                        Ttokenlist type = GetSingleTtokens(c);
                         tokens.Add(new Ttokens(type, c.ToString(), null, line, column));
                     }
                     column++;
@@ -151,10 +181,10 @@ public static class Lexerr
                     else
                     {
                         string number = currentToken.ToString();
-                        Ttokenlist numberType = DetermineNumberType(number);
+                        Ttokenlist numberType = NumberDefiner(number);
                         tokens.Add(new Ttokens(numberType, number, ParseNumber(number, numberType), line, column - number.Length));
                         currentToken.Clear();
-                        Structure = Structure.Start;
+                        structure = Structure.Start;
                     }
                     break;
 
@@ -168,7 +198,27 @@ public static class Lexerr
                     else
                     {
                         string identifier = currentToken.ToString();
-                        if (keywords.TryGetValue(identifier, out Ttokenlist keywordType))
+                        if (identifier == "Console" && i < buffer.Length - 1 && buffer[i] == '.')
+                        {
+                            currentToken.Append(buffer[i]);
+                            i++;
+                            column++;
+
+                            if (i + 8 <= buffer.Length && new string(buffer, i, 8) == "WriteLine")
+                            {
+                                currentToken.Append("WriteLine");
+                                tokens.Add(new Ttokens(Ttokenlist.CONSOLE_WRITELINE, currentToken.ToString(), null, line, column - currentToken.Length));
+                                i += 8;
+                                column += 8;
+                            }
+                            else
+                            {
+                                tokens.Add(new Ttokens(Ttokenlist.ID, identifier, null, line, column - identifier.Length));
+                                i--;
+                                column--;
+                            }
+                        }
+                        else if (keywords.TryGetValue(identifier, out Ttokenlist keywordType))
                         {
                             tokens.Add(new Ttokens(keywordType, identifier, null, line, column - identifier.Length));
                         }
@@ -177,7 +227,7 @@ public static class Lexerr
                             tokens.Add(new Ttokens(Ttokenlist.ID, identifier, null, line, column - identifier.Length));
                         }
                         currentToken.Clear();
-                        Structure = Structure.Start;
+                        structure = Structure.Start;
                     }
                     break;
 
@@ -187,7 +237,7 @@ public static class Lexerr
                         currentToken.Append(c);
                         tokens.Add(new Ttokens(Ttokenlist.STRING, currentToken.ToString(), currentToken.ToString().Substring(1, currentToken.Length - 2), line, column - currentToken.Length));
                         currentToken.Clear();
-                        Structure = Structure.Start;
+                        structure = Structure.Start;
                         i++;
                         column++;
                     }
@@ -205,7 +255,7 @@ public static class Lexerr
                         currentToken.Append(c);
                         tokens.Add(new Ttokens(Ttokenlist.CHARACTER, currentToken.ToString(), currentToken.ToString()[1], line, column - currentToken.Length));
                         currentToken.Clear();
-                        Structure = Structure.Start;
+                        structure = Structure.Start;
                         i++;
                         column++;
                     }
@@ -217,14 +267,36 @@ public static class Lexerr
                     }
                     break;
 
-                case Structure.Comment:
+                case Structure.SingleLineComment:
                     if (c == '\n')
                     {
-                        Structure = Structure.Start;
+                        structure = Structure.Start;
                         line++;
                         column = 1;
                     }
                     i++;
+                    break;
+
+                case Structure.MultiLineComment:
+                    if (c == '*' && i + 1 < buffer.Length && buffer[i + 1] == '/')
+                    {
+                        structure = Structure.Start;
+                        i += 2;
+                        column += 2;
+                    }
+                    else
+                    {
+                        if (c == '\n')
+                        {
+                            line++;
+                            column = 1;
+                        }
+                        else
+                        {
+                            column++;
+                        }
+                        i++;
+                    }
                     break;
             }
         }
@@ -238,7 +310,7 @@ public static class Lexerr
         return tokens;
     }
 
-    private static Ttokenlist GetSingleCharTtokenlist(char c)
+    private static Ttokenlist GetSingleTtokens(char c)
     {
         switch (c)
         {
@@ -274,7 +346,7 @@ public static class Lexerr
         }
     }
 
-    private static Ttokenlist DetermineNumberType(string number)
+    private static Ttokenlist NumberDefiner(string number)
     {
         if (number.Contains("."))
             return Ttokenlist.FLOAT;
